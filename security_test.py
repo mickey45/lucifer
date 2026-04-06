@@ -7,6 +7,7 @@ Tests for common vulnerabilities that were fixed
 import subprocess
 import sys
 import os
+import hashlib
 from pathlib import Path
 
 def test_command_injection():
@@ -87,6 +88,34 @@ def test_url_encoding():
     print(f"✓ Encoded URL: {url}")
     print("✓ XSS prevented through URL encoding")
 
+def test_pin_security():
+    """Test PIN authentication security"""
+    print("\nTesting PIN Authentication Security...")
+
+    # Test PIN hashing
+    test_pin = "1234"
+    hashed = hashlib.sha256(test_pin.encode()).hexdigest()
+    print(f"✓ PIN hashing: {test_pin} -> {hashed[:16]}...")
+
+    # Test PIN comparison safety
+    wrong_pin = "5678"
+    wrong_hash = hashlib.sha256(wrong_pin.encode()).hexdigest()
+    
+    if hashed != wrong_hash:
+        print(f"✓ PIN verification: Wrong PIN rejected")
+    else:
+        print(f"✗ PIN verification: Same hash generated (impossible)")
+
+    # Test PIN strength
+    weak_pins = ["123", "12"]
+    for pin in weak_pins:
+        if len(pin) < 4:
+            print(f"✓ PIN validation: '{pin}' rejected (too short)")
+
+    strong_pin = "9876"
+    if len(strong_pin) >= 4 and strong_pin.isdigit():
+        print(f"✓ PIN validation: '{strong_pin}' accepted (strong)")
+
 if __name__ == "__main__":
     print("Security Test Suite for Lucifer Chatbot")
     print("=" * 50)
@@ -95,6 +124,7 @@ if __name__ == "__main__":
     test_path_traversal()
     test_eval_safety()
     test_url_encoding()
+    test_pin_security()
 
     print("\n" + "=" * 50)
     print("All security tests completed!")

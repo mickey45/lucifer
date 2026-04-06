@@ -13,6 +13,7 @@ Usage:
 """
 
 import datetime
+import hashlib
 import json
 import os
 import platform
@@ -56,8 +57,154 @@ except ImportError:
 # ─────────────────────────────────────────────
 ASSISTANT_NAME = "Lucifer"
 MEMORY_FILE = Path.home() / ".lucifer_memory.json"
+AUTH_FILE = Path.home() / ".lucifer_auth.json"
 MAX_CONVERSATION_HISTORY = 50
 MAX_MEMORY_ITEMS = 200
+MAX_FAILED_ATTEMPTS = 3
+LOCKOUT_DURATION = 300  # 5 minutes in seconds
+
+
+# ─────────────────────────────────────────────
+# SECURITY & AUTHENTICATION
+# ─────────────────────────────────────────────
+class SecurityAuth:
+    """PIN-based authentication system with security features."""
+
+    def __init__(self, filepath: Path):
+        self.filepath = filepath
+        self.auth_data = {"pin_hash": None, "username": None, "failed_attempts": 0, "locked_until": None}
+        self._load()
+
+    def _load(self):
+        """Load authentication data from file."""
+        if self.filepath.exists():
+            try:
+                data = json.loads(self.filepath.read_text())
+                self.auth_data = data
+            except (json.JSONDecodeError, KeyError):
+                self._save()
+
+    def _save(self):
+        """Save authentication data securely."""
+        try:
+            self.filepath.write_text(json.dumps(self.auth_data, indent=2))
+            # Restrict file permissions to owner only
+            os.chmod(self.filepath, 0o600)
+        except Exception as e:
+            print(f"  [!] Could not save auth data: {e}")
+
+    def _hash_pin(self, pin: str) -> str:
+        """Hash a PIN using SHA-256."""
+        return hashlib.sha256(pin.encode()).hexdigest()
+
+    def is_locked(self) -> bool:
+        """Check if the system is locked due to failed attempts."""
+        if self.auth_data["locked_until"]:
+            if time.time() < self.auth_data["locked_until"]:
+                remaining = int(self.auth_data["locked_until"] - time.time())
+                print(f"  [!] System locked. Try again in {remaining} seconds.")
+                return True
+            else:
+                # Unlock the system
+                self.auth_data["locked_until"] = None
+                self.auth_data["failed_attempts"] = 0
+                self._save()
+                return False
+        return False
+
+    def is_registered(self) -> bool:
+        """Check if PIN is registered."""
+        return self.auth_data["pin_hash"] is not None
+
+    def register_pin(self, pin: str, username: str = "User") -> bool:
+        """Register a new PIN (first-time setup)."""
+        if not pin.isdigit() or len(pin) < 4:
+            print("  [!] PIN must be at least 4 digits.")
+            return False
+
+        self.auth_data["pin_hash"] = self._hash_pin(pin)
+        self.auth_data["username"] = username
+        self.auth_data["failed_attempts"] = 0
+        self.auth_data["locked_until"] = None
+        self._save()
+        return True
+
+    def verify_pin(self, pin: str) -> bool:
+        """Verify the PIN."""
+        if self.is_locked():
+            return False
+
+        if not self.is_registered():
+            print("  [!] No PIN registered. Please set up first.")
+            return False
+
+        if self._hash_pin(pin) == self.auth_data["pin_hash"]:
+            # Reset failed attempts on successful login
+            self.auth_data["failed_attempts"] = 0
+            self.auth_data["locked_until"] = None
+            self._save()
+            return True
+        else:
+            # Increment failed attempts
+            self.auth_data["failed_attempts"] += 1
+            remaining = MAX_FAILED_ATTEMPTS - self.auth_data["failed_attempts"]
+
+            if self.auth_data["failed_attempts"] >= MAX_FAILED_ATTEMPTS:
+                self.auth_data["locked_until"] = time.time() + LOCKOUT_DURATION
+                self._save()
+                print(f"  [!] Too many failed attempts. System locked for 5 minutes.")
+                return False
+            else:
+                print(f"  [!] Incorrect PIN. {remaining} attempts remaining.")
+                self._save()
+                return False
+
+    def authenticate(self) -> bool:
+        """Authenticate the user by PIN."""
+        if not self.is_registered():
+            print(f"\n  [{ASSISTANT_NAME}]: First time setup! Please create a PIN.")
+            print("  [*] PIN must be at least 4 digits for security.")
+            while True:
+                pin = input("  Enter your PIN: ").strip()
+                confirm_pin = input("  Confirm PIN: ").strip()
+
+                if pin != confirm_pin:
+                    print("  [!] PINs don't match. Try again.")
+                    continue
+
+                username = input("  Enter your name (or press Enter for 'User'): ").strip() or "User"
+
+                if self.register_pin(pin, username):
+                    print(f"  [{ASSISTANT_NAME}]: PIN registered successfully. Welcome, {username}.")
+                    return True
+                else:
+                    print("  [!] Invalid PIN. Try again.")
+        else:
+            # Existing user login
+            username = self.auth_data.get("username", "User")
+            attempts = 0
+            while attempts < 3:
+                pin = input(f"  [{ASSISTANT_NAME}]: Please enter your PIN: ").strip()
+                if self.verify_pin(pin):
+                    print(f"  [{ASSISTANT_NAME}]: Welcome back, {username}!")
+                    return True
+                attempts += 1
+
+            if self.is_locked():
+                return False
+            return False
+
+
+# ─────────────────────────────────────────────
+# CONFIGURATION
+# ─────────────────────────────────────────────
+ASSISTANT_NAME = "Lucifer"
+MEMORY_FILE = Path.home() / ".lucifer_memory.json"
+AUTH_FILE = Path.home() / ".lucifer_auth.json"
+MAX_CONVERSATION_HISTORY = 50
+MAX_MEMORY_ITEMS = 200
+MAX_FAILED_ATTEMPTS = 3
+LOCKOUT_DURATION = 300  # 5 minutes in seconds
 
 
 # ─────────────────────────────────────────────
@@ -546,6 +693,7 @@ class LuciferAI:
     """The core AI brain that orchestrates everything."""
 
     def __init__(self):
+        self.auth = SecurityAuth(AUTH_FILE)
         self.memory = Memory(MEMORY_FILE)
         self.nlp_engine = NLPEngine()
         self.chat = ChatEngine(self.memory)
@@ -736,6 +884,11 @@ class LuciferAI:
 
     def run(self):
         """Main loop."""
+        # Authenticate user before starting
+        if not self.auth.authenticate():
+            speak("Authentication failed. Exiting.")
+            sys.exit(1)
+
         name = self.memory.preferences.get("name", "")
         greeting = f"Welcome back, {name}!" if name else "Lucifer initialized. How can I help you?"
         speak(greeting)

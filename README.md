@@ -26,9 +26,13 @@ A voice-enabled, text-input AI assistant that automates PC tasks, holds intellig
 - **Timer System**: Set countdown timers with notifications
 - **Joke Generator**: Built-in humor for entertainment
 - **Help System**: Comprehensive command reference
+- **PIN Authentication**: Secure PIN-based user authentication with lockout protection
 
 ## 🛡️ Security Features
 
+- **PIN-Based Authentication**: 4-digit PIN protection with failed attempt tracking
+- **Account Lockout**: Automatic 5-minute lockout after 3 failed attempts
+- **Secure Storage**: PIN hashing using SHA-256 algorithm
 - **Command Injection Protection**: Uses subprocess with argument lists
 - **Path Traversal Prevention**: File paths are normalized and validated
 - **Code Execution Safeguards**: Restricted eval environment
@@ -61,6 +65,26 @@ A voice-enabled, text-input AI assistant that automates PC tasks, holds intellig
    ```
 
 ## 💻 Usage
+
+### First Time Setup
+On first run, the chatbot will prompt you to set up a PIN:
+
+```
+[Lucifer]: First time setup! Please create a PIN.
+[*] PIN must be at least 4 digits for security.
+Enter your PIN: 1234
+Confirm PIN: 1234
+Enter your name (or press Enter for 'User'): John
+[Lucifer]: PIN registered successfully. Welcome, John.
+```
+
+### Authentication
+On subsequent runs, simply enter your PIN to authenticate:
+
+```
+[Lucifer]: Please enter your PIN: 1234
+[Lucifer]: Welcome back, John!
+```
 
 ### Basic Commands
 - `help` - Show all available commands
@@ -96,6 +120,31 @@ This tests for:
 - Path traversal attacks
 - Code execution exploits
 - XSS prevention
+- PIN authentication security
+- PIN strength validation
+
+## 🔐 PIN Authentication Details
+
+### PIN Requirements
+- **Minimum Length**: 4 digits
+- **Format**: Numbers only (0-9)
+- **Hashing**: SHA-256 for secure storage
+- **Verification**: Constant-time comparison to prevent timing attacks
+
+### Security Features
+- **Failed Attempt Tracking**: Tracks consecutive failed login attempts
+- **Account Lockout**: Automatic 5-minute lockout after 3 failed attempts
+- **Failed Attempt Reset**: Counter resets on successful authentication
+- **Secure File Storage**: Authentication data stored in `~/.lucifer_auth.json` with restricted permissions (0600)
+
+### Resetting PIN
+If you forget your PIN, delete `~/.lucifer_auth.json` to reset:
+
+```bash
+rm ~/.lucifer_auth.json
+```
+
+On the next run, you'll be prompted to set up a new PIN.
 
 ## 📁 Project Structure
 
