@@ -892,13 +892,21 @@ class LuciferAI:
         name = self.memory.preferences.get("name", "")
         greeting = f"Welcome back, {name}!" if name else "Lucifer initialized. How can I help you?"
         speak(greeting)
+        speak("Say 'Lucifer' to wake me up, or just start typing.")
 
         while True:
             command = listen()
-            if command:
-                response = self.process(command)
-                if response:
-                    speak(response)
+            if not command:
+                continue
+            
+            # Check for wake word
+            if command.lower().strip() == "lucifer":
+                speak("I'm awake. What can I help you with?")
+                continue
+            
+            response = self.process(command)
+            if response:
+                speak(response)
 
 
 # ─────────────────────────────────────────────
