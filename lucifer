@@ -1,0 +1,6 @@
+#!/bin/bash
+# Lucifer AI Assistant - Launcher Script
+# Run this script to start the chatbot
+
+cd "$(dirname "$0")" || exit 1
+python chatbot.py "$@"
